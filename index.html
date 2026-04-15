@@ -158,10 +158,7 @@
         .card.expanded .card-body-wrapper { grid-template-rows: 1fr; }
         .card.expanded .card-inner { opacity: 1; overflow: visible; }
         
-        .card-content {
-            padding-top: 16px; display: flex; flex-direction: column; gap: 12px;
-        }
-        /* ------------------------------- */
+        .card-content { padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
 
         .add-btn {
             background-color: var(--primary); color: var(--primary-contrast); border: none; border-radius: 12px; 
@@ -249,6 +246,13 @@
             width: 100%; padding: 14px; border-radius: 12px; border: none; background: var(--row-bg); 
             color: var(--text-main); font-size: 0.95rem; font-family: inherit; transition: background-color 0.3s ease, color 0.3s ease;
         }
+        
+        /* Make date calendar icon visible in dark mode */
+        [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.7;
+        }
+
         .form-group input:focus, .form-group select:focus { outline: 2px solid var(--primary); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
@@ -503,15 +507,46 @@
 
         updateThemeIcon();
 
+        // Date Format Helpers
+        function getTodayYMD() {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatToYMD(dateStr) {
+            if (!dateStr) return getTodayYMD();
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return getTodayYMD();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function displayDate(dStr) {
+            if (!dStr) return '';
+            const parts = dStr.split('-');
+            if (parts.length === 3) {
+                const m = parseInt(parts[1], 10);
+                const d = parseInt(parts[2], 10);
+                const y = parts[0];
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return `${months[m - 1]} ${d}, ${y}`;
+            }
+            // Fallback for older data format
+            const dateObj = new Date(dStr);
+            if (!isNaN(dateObj.getTime())) {
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
+            }
+            return dStr;
+        }
+
         const defaultData = {
-            userName: 'User',
-            profilePic: '',
-            borrowed: [],
-            income: [],
-            expenses: [],
-            records: [],
-            accounts: [],
-            history: [] 
+            userName: 'User', profilePic: '', borrowed: [], income: [], expenses: [], records: [], accounts: [], history: [] 
         };
 
         let appData = JSON.parse(localStorage.getItem('finTrackerData')) || JSON.parse(JSON.stringify(defaultData));
@@ -530,55 +565,35 @@
         
         function loadProfilePic() {
             const img = document.getElementById('profile-img-display');
-            if (appData.profilePic) {
-                img.src = appData.profilePic;
-                img.style.display = 'block';
-            } else {
-                img.style.display = 'none';
-            }
+            if (appData.profilePic) { img.src = appData.profilePic; img.style.display = 'block'; } else { img.style.display = 'none'; }
         }
 
         document.getElementById('user-name-display').innerText = appData.userName;
-        updateProfileInitials();
-        loadProfilePic();
+        updateProfileInitials(); loadProfilePic();
 
         function handleProfileImageUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+            const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const MAX_SIZE = 150;
-                    let width = img.width, height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-                    } else {
-                        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-                    }
-                    canvas.width = width; canvas.height = height;
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    const MAX_SIZE = 150; let width = img.width, height = img.height;
+                    if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
+                    else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+                    canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height);
                     appData.profilePic = canvas.toDataURL('image/jpeg', 0.8);
                     saveData(); loadProfilePic(); showStatus('Profile picture updated!');
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-            event.target.value = ''; 
+                }; img.src = e.target.result;
+            }; reader.readAsDataURL(file); event.target.value = ''; 
         }
 
         function saveData() { localStorage.setItem('finTrackerData', JSON.stringify(appData)); }
         
         function resetData() {
             if (confirm("Are you sure you want to permanently reset all tracker data? This action cannot be undone.")) {
-                localStorage.removeItem('finTrackerData');
-                appData = JSON.parse(JSON.stringify(defaultData)); 
-                saveData();
-                document.getElementById('user-name-display').innerText = appData.userName;
+                localStorage.removeItem('finTrackerData'); appData = JSON.parse(JSON.stringify(defaultData)); 
+                saveData(); document.getElementById('user-name-display').innerText = appData.userName;
                 updateProfileInitials(); loadProfilePic(); renderAll(); showStatus('App Reset!');
             }
         }
@@ -587,31 +602,19 @@
         const parseNum = (str) => parseFloat(String(str).replace(/[^0-9.-]+/g,"")) || 0;
 
         function showStatus(msg) {
-            const bubble = document.getElementById('status-bubble');
-            bubble.innerText = msg;
-            bubble.style.display = 'block';
+            const bubble = document.getElementById('status-bubble'); bubble.innerText = msg; bubble.style.display = 'block';
             setTimeout(() => { bubble.style.display = 'none'; }, 2500);
         }
 
-        function updateUserName(element) {
-            appData.userName = element.innerText.trim();
-            saveData(); updateProfileInitials();
-        }
+        function updateUserName(element) { appData.userName = element.innerText.trim(); saveData(); updateProfileInitials(); }
 
         /* --- ACCORDION LOGIC --- */
-        function toggleCard(headerEl) {
-            const card = headerEl.closest('.card');
-            if(card) card.classList.toggle('expanded');
-        }
+        function toggleCard(headerEl) { const card = headerEl.closest('.card'); if(card) card.classList.toggle('expanded'); }
 
-        // Expanded logic for Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                const targetId = item.getAttribute('href').substring(1);
-                const targetCard = document.getElementById(targetId);
-                if (targetCard && !targetCard.classList.contains('expanded')) {
-                    targetCard.classList.add('expanded');
-                }
+                const targetId = item.getAttribute('href').substring(1); const targetCard = document.getElementById(targetId);
+                if (targetCard && !targetCard.classList.contains('expanded')) { targetCard.classList.add('expanded'); }
             });
         });
 
@@ -620,8 +623,7 @@
                 if (entry.isIntersecting) {
                     const currentId = entry.target.getAttribute('id');
                     document.querySelectorAll('.nav-item').forEach(a => {
-                        a.classList.remove('active');
-                        if (a.getAttribute('href') === `#${currentId}`) { a.classList.add('active'); }
+                        a.classList.remove('active'); if (a.getAttribute('href') === `#${currentId}`) { a.classList.add('active'); }
                     });
                 }
             });
@@ -630,24 +632,18 @@
         document.querySelectorAll('.card[id]').forEach(sec => observer.observe(sec));
 
         function renderBorrowed() {
-            const container = document.getElementById('borrowed-body');
-            let tR = 0;
+            const container = document.getElementById('borrowed-body'); let tR = 0;
             if (appData.borrowed.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:10px 0;">No debts added yet.</div>';
                 document.getElementById('total-balance').innerText = fmt(0); return;
             }
             container.innerHTML = appData.borrowed.map(item => {
-                const rem = item.borrowed - item.paid;
-                tR += rem;
+                const rem = item.borrowed - item.paid; tR += rem;
                 const progress = item.borrowed > 0 ? Math.max(0, Math.min((item.paid / item.borrowed) * 100, 100)) : (item.paid >= 0 && item.paid === item.borrowed ? 100 : 0);
-                const isPaidOff = rem <= 0 && item.borrowed > 0;
-                const barColor = isPaidOff ? 'var(--success)' : 'var(--warning)';
+                const isPaidOff = rem <= 0 && item.borrowed > 0; const barColor = isPaidOff ? 'var(--success)' : 'var(--warning)';
                 return `
                 <div class="data-row" onclick="openEntryModal('borrowed', ${item.id})">
-                    <div class="bc-header">
-                        <div>${item.name}</div>
-                        <div class="${isPaidOff ? 'positive' : 'negative'}">${fmt(rem)}</div>
-                    </div>
+                    <div class="bc-header"><div>${item.name}</div><div class="${isPaidOff ? 'positive' : 'negative'}">${fmt(rem)}</div></div>
                     <div class="bc-progress-bar"><div class="bc-progress-fill" style="width: ${progress}%; background: ${barColor}"></div></div>
                     <div class="bc-stats"><div>Debt: <strong>${fmt(item.borrowed)}</strong></div><div>Paid: <strong>${fmt(item.paid)}</strong></div></div>
                 </div>`;
@@ -656,32 +652,23 @@
         }
 
         function renderIncome() {
-            const container = document.getElementById('income-body');
-            let tA = 0;
+            const container = document.getElementById('income-body'); let tA = 0;
             if (appData.income.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:10px 0;">No income sources yet.</div>';
                 document.getElementById('total-income').innerText = fmt(0); return;
             }
             container.innerHTML = appData.income.map(item => {
-                tA += item.actual;
-                return `
-                <div class="data-row ie-row" onclick="openEntryModal('income', ${item.id})">
-                    <div class="ie-title">${item.name}</div><div class="ie-amount">${fmt(item.actual)}</div>
-                </div>`;
+                tA += item.actual; return `<div class="data-row ie-row" onclick="openEntryModal('income', ${item.id})"><div class="ie-title">${item.name}</div><div class="ie-amount">${fmt(item.actual)}</div></div>`;
             }).join('');
             document.getElementById('total-income').innerText = fmt(tA);
         }
 
         function renderExpenses() {
-            const container = document.getElementById('expenses-body');
-            const today = new Date().getDate();
-            const isFirstHalf = today <= 15;
-            let upcomingTotal = 0;
-            
+            const container = document.getElementById('expenses-body'); const today = new Date().getDate();
+            const isFirstHalf = today <= 15; let upcomingTotal = 0;
             if (appData.expenses.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:10px 0;">No expenses mapped yet.</div>';
-                document.getElementById('expenses-header-title').innerText = `Upcoming (${isFirstHalf ? '15th' : '30th'})`;
-                document.getElementById('total-expenses').innerText = fmt(0); return;
+                document.getElementById('expenses-header-title').innerText = `Upcoming (${isFirstHalf ? '15th' : '30th'})`; document.getElementById('total-expenses').innerText = fmt(0); return;
             }
             container.innerHTML = appData.expenses.map(item => {
                 if (isFirstHalf) { upcomingTotal += item.d15; } else { upcomingTotal += item.d30; }
@@ -699,8 +686,7 @@
         }
 
         function renderRecords() {
-            const container = document.getElementById('records-body');
-            let tR = 0;
+            const container = document.getElementById('records-body'); let tR = 0;
             if (appData.records.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:10px 0;">No general records yet.</div>';
                 document.getElementById('total-records').innerText = fmt(0); return;
@@ -710,7 +696,7 @@
                 return `
                 <div class="data-row" onclick="openEntryModal('records', ${item.id})">
                     <div class="ie-row">
-                        <div><div class="ie-title">${item.name}</div><div style="font-size:0.8rem; color:var(--text-muted); margin-top: 4px;">${item.date}</div></div>
+                        <div><div class="ie-title">${item.name}</div><div style="font-size:0.8rem; color:var(--text-muted); margin-top: 4px;">${displayDate(item.date)}</div></div>
                         <div class="ie-amount" style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">${fmt(item.amount)}</div>
                     </div>
                 </div>`;
@@ -733,7 +719,7 @@
                 <div class="data-row" style="flex-direction: row; justify-content:space-between; align-items: center;" onclick="openEntryModal('history', ${h.id})">
                     <div>
                         <div style="font-weight:600; font-size: 0.95rem;">${h.catName}</div>
-                        <div style="font-size:0.8rem; color:var(--text-muted); margin-top: 4px;">${h.date}</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-top: 4px;">${displayDate(h.date)}</div>
                     </div>
                     <div class="${h.amount > 0 ? 'positive' : 'negative'}" style="font-weight:700; font-family: 'JetBrains Mono', monospace;">
                         ${h.amount > 0 ? '+' : ''}${fmt(h.amount)}
@@ -741,29 +727,18 @@
                 </div>`).join('') || '<div style="text-align:center; color:var(--text-muted); padding:20px">No recent logs.</div>';
         }
 
-        function renderAll() { 
-            renderBorrowed(); renderIncome(); renderAccounts(); renderExpenses(); renderRecords(); renderHistory(); 
-        }
+        function renderAll() { renderBorrowed(); renderIncome(); renderAccounts(); renderExpenses(); renderRecords(); renderHistory(); }
 
         function openEntryModal(category, id = null) {
-            document.getElementById('em-id').value = id || '';
-            document.getElementById('em-category').value = category;
-            const isEdit = !!id;
-            
-            document.getElementById('em-title').innerText = isEdit ? 'Edit Entry' : 'Add Entry';
-            document.getElementById('em-btn-delete').style.display = isEdit ? 'flex' : 'none';
+            document.getElementById('em-id').value = id || ''; document.getElementById('em-category').value = category; const isEdit = !!id;
+            document.getElementById('em-title').innerText = isEdit ? 'Edit Entry' : 'Add Entry'; document.getElementById('em-btn-delete').style.display = isEdit ? 'flex' : 'none';
 
-            const nameLabel = document.getElementById('em-name-label');
-            const val1Group = document.getElementById('em-group-val1');
-            const val1Label = document.getElementById('em-val1-label');
-            const val1Input = document.getElementById('em-val1');
-            const val2Group = document.getElementById('em-group-val2');
-            const val2Label = document.getElementById('em-val2-label');
+            const nameLabel = document.getElementById('em-name-label'); const val1Group = document.getElementById('em-group-val1');
+            const val1Label = document.getElementById('em-val1-label'); const val1Input = document.getElementById('em-val1');
+            const val2Group = document.getElementById('em-group-val2'); const val2Label = document.getElementById('em-val2-label');
             const val2Input = document.getElementById('em-val2');
 
-            val1Input.type = 'number'; val1Input.inputMode = 'decimal';
-            val2Input.type = 'number'; val2Input.inputMode = 'decimal';
-            val2Group.style.display = 'block';
+            val1Input.type = 'number'; val1Input.inputMode = 'decimal'; val2Input.type = 'number'; val2Input.inputMode = 'decimal'; val2Group.style.display = 'block';
 
             let obj = isEdit ? appData[category].find(x => x.id === id) : {};
 
@@ -778,20 +753,18 @@
                 val2Label.innerText = '30th Amount'; val2Input.value = isEdit ? obj.d30 : ''; document.getElementById('em-name').value = isEdit ? obj.name : '';
             } else if (category === 'records') {
                 nameLabel.innerText = 'Record Title'; val1Label.innerText = 'Amount'; val1Input.value = isEdit ? obj.amount : '';
-                val2Label.innerText = 'Date'; val2Input.type = 'text'; val2Input.inputMode = 'text';
-                val2Input.value = isEdit ? obj.date : new Date().toLocaleDateString(); document.getElementById('em-name').value = isEdit ? obj.name : '';
+                val2Label.innerText = 'Date'; val2Input.type = 'date'; val2Input.inputMode = '';
+                val2Input.value = formatToYMD(isEdit ? obj.date : null); document.getElementById('em-name').value = isEdit ? obj.name : '';
             } else if (category === 'accounts') {
                 nameLabel.innerText = 'Bank Name'; val1Label.innerText = 'Account Details/Number'; val1Input.type = 'text'; val1Input.inputMode = 'text';
                 val1Input.value = isEdit ? obj.details : ''; val2Group.style.display = 'none'; document.getElementById('em-name').value = isEdit ? obj.name : '';
             } else if (category === 'history') {
                 nameLabel.innerText = 'Log Description'; val1Label.innerText = 'Amount'; val1Input.value = isEdit ? obj.amount : '';
-                val2Label.innerText = 'Date'; val2Input.type = 'text'; val2Input.inputMode = 'text'; 
-                val2Input.value = isEdit ? obj.date : new Date().toLocaleDateString(); document.getElementById('em-name').value = isEdit ? obj.catName : '';
+                val2Label.innerText = 'Date'; val2Input.type = 'date'; val2Input.inputMode = ''; 
+                val2Input.value = formatToYMD(isEdit ? obj.date : null); document.getElementById('em-name').value = isEdit ? obj.catName : '';
             }
 
-            const modal = document.getElementById('entry-modal');
-            modal.style.display = 'flex';
-            setTimeout(() => modal.classList.add('show'), 10);
+            const modal = document.getElementById('entry-modal'); modal.style.display = 'flex'; setTimeout(() => modal.classList.add('show'), 10);
         }
 
         function saveEntry() {
@@ -820,12 +793,10 @@
             }
 
             if (id) {
-                const index = appData[category].findIndex(x => x.id == id);
-                if (index > -1) appData[category][index] = { ...appData[category][index], ...newData };
+                const index = appData[category].findIndex(x => x.id == id); if (index > -1) appData[category][index] = { ...appData[category][index], ...newData };
             } else { appData[category].push({ id: Date.now(), ...newData }); }
 
             saveData();
-            
             if (category === 'borrowed') renderBorrowed(); else if (category === 'income') renderIncome();
             else if (category === 'expenses') renderExpenses(); else if (category === 'records') renderRecords();
             else if (category === 'accounts') renderAccounts(); else if (category === 'history') renderAll(); 
@@ -844,11 +815,9 @@
                     }
                 }
                 appData[category] = appData[category].filter(x => x.id != id); saveData();
-                
                 if (category === 'history') renderAll(); else if (category === 'borrowed') renderBorrowed();
                 else if (category === 'income') renderIncome(); else if (category === 'expenses') renderExpenses();
                 else if (category === 'records') renderRecords(); else if (category === 'accounts') renderAccounts();
-                
                 closeModal('entry-modal'); showStatus('Entry deleted.');
             }
         }
@@ -858,15 +827,11 @@
             ['borrowed', 'income', 'expenses'].forEach(type => {
                 if (appData[type].length === 0) return;
                 const group = document.createElement('optgroup'); group.label = type.toUpperCase();
-                appData[type].forEach(item => {
-                    const opt = document.createElement('option'); opt.value = `${type}|${item.id}|${item.name}`;
-                    opt.textContent = item.name; group.appendChild(opt);
-                });
+                appData[type].forEach(item => { const opt = document.createElement('option'); opt.value = `${type}|${item.id}|${item.name}`; opt.textContent = item.name; group.appendChild(opt); });
                 catSelect.appendChild(group);
             });
             updateQUFields(); 
-            const modal = document.getElementById('quick-update-modal');
-            modal.style.display = 'flex'; setTimeout(() => modal.classList.add('show'), 10);
+            const modal = document.getElementById('quick-update-modal'); modal.style.display = 'flex'; setTimeout(() => modal.classList.add('show'), 10);
         }
 
         function updateQUFields() {
@@ -886,7 +851,7 @@
             
             if (index > -1) {
                 appData[type][index][field] += amount;
-                appData.history.unshift({ id: Date.now(), date: new Date().toLocaleDateString(), catName, amount, refType: type, refId: Number(id), refField: field });
+                appData.history.unshift({ id: Date.now(), date: getTodayYMD(), catName, amount, refType: type, refId: Number(id), refField: field });
                 saveData();
                 if (type === 'borrowed') renderBorrowed(); else if (type === 'income') renderIncome(); else if (type === 'expenses') renderExpenses();
                 renderHistory(); closeModal('quick-update-modal'); document.getElementById('qu-amount').value = ''; showStatus('Update saved!');
@@ -894,13 +859,11 @@
         }
 
         function closeModal(id) { 
-            const modal = document.getElementById(id); modal.classList.remove('show');
-            setTimeout(() => { modal.style.display = 'none'; }, 300);
+            const modal = document.getElementById(id); modal.classList.remove('show'); setTimeout(() => { modal.style.display = 'none'; }, 300);
         }
 
         function exportData() {
-            let csv = "Category,Type/Date,Value 1,Value 2\n\nPROFILE\nName\n";
-            csv += `"${(appData.userName || 'User').replace(/"/g, '""')}"\n`;
+            let csv = "Category,Type/Date,Value 1,Value 2\n\nPROFILE\nName\n"; csv += `"${(appData.userName || 'User').replace(/"/g, '""')}"\n`;
             csv += "\nBORROWED\nName,Debt,Paid,Balance\n"; appData.borrowed.forEach(i => csv += `"${(i.name || '').replace(/"/g, '""')}",${i.borrowed || 0},${i.paid || 0},${(i.borrowed || 0) - (i.paid || 0)}\n`);
             csv += "\nINCOME\nSource,Amount\n"; appData.income.forEach(i => csv += `"${(i.name || '').replace(/"/g, '""')}",${i.actual || 0}\n`);
             csv += "\nACCOUNTS\nBank,Account Number\n"; appData.accounts.forEach(i => csv += `"${(i.name || '').replace(/"/g, '""')}","${(i.details || '').replace(/"/g, '""')}"\n`);
@@ -914,8 +877,7 @@
         }
 
         function handleImport(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
+            const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
             reader.onload = function(e) {
                 const lines = e.target.result.split('\n').map(l => l.trim());
                 if (lines.length < 3) return showStatus('Invalid CSV format');
@@ -948,8 +910,7 @@
                     updateProfileInitials(); renderAll(); showStatus('Backup imported!'); 
                 }
                 event.target.value = ''; 
-            };
-            reader.readAsText(file);
+            }; reader.readAsText(file);
         }
 
         renderAll();
